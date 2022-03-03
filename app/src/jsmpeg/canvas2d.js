@@ -5,7 +5,6 @@ var CanvasRenderer = function(options) {
 	this.width = this.canvas.width;
 	this.height = this.canvas.height;
 	this.enabled = true;
-	this.alpha = options.alpha || 100
 
 	this.context = this.canvas.getContext('2d');
 };
@@ -34,17 +33,15 @@ CanvasRenderer.prototype.renderProgress = function(progress) {
 	ctx.fillStyle = '#222';
 	ctx.fillRect(0, 0, w, h);
 	ctx.fillStyle = '#fff';
-
 	ctx.fillRect(0, h - h * progress, w, h * progress);
 };
 
-
 CanvasRenderer.prototype.render = function(y, cb, cr) {
-	this.YCbCrToRGBA(y, cb, cr, this.imageData.data, this.alpha);
+	this.YCbCrToRGBA(y, cb, cr, this.imageData.data);
 	this.context.putImageData(this.imageData, 0, 0);
 };
 
-CanvasRenderer.prototype.YCbCrToRGBA = function(y, cb, cr, rgba, alpha) {
+CanvasRenderer.prototype.YCbCrToRGBA = function(y, cb, cr, rgba) {
 	if (!this.enabled) {
 		return;
 	}
@@ -74,8 +71,6 @@ CanvasRenderer.prototype.YCbCrToRGBA = function(y, cb, cr, rgba, alpha) {
 
 	var ccb, ccr, r, g, b;
 
-	var a = 255/(100/(alpha))
-
 	for (var row = 0; row < rows; row++) {
 		for (var col = 0; col < cols; col++) {
 			ccb = cb[cIndex];
@@ -85,7 +80,6 @@ CanvasRenderer.prototype.YCbCrToRGBA = function(y, cb, cr, rgba, alpha) {
 			r = (ccb + ((ccb * 103) >> 8)) - 179;
 			g = ((ccr * 88) >> 8) - 44 + ((ccb * 183) >> 8) - 91;
 			b = (ccr + ((ccr * 198) >> 8)) - 227;
-			a = 255 / (100/alpha); //(255/ (100/percentage value))
 
 			// Line 1
 			var y1 = y[yIndex1++];
@@ -93,11 +87,9 @@ CanvasRenderer.prototype.YCbCrToRGBA = function(y, cb, cr, rgba, alpha) {
 			rgba[rgbaIndex1]   = y1 + r;
 			rgba[rgbaIndex1+1] = y1 - g;
 			rgba[rgbaIndex1+2] = y1 + b;
-			rgba[rgbaIndex1+3] = y1 + a;
 			rgba[rgbaIndex1+4] = y2 + r;
 			rgba[rgbaIndex1+5] = y2 - g;
 			rgba[rgbaIndex1+6] = y2 + b;
-			rgba[rgbaIndex1+7] = y2 + a;
 			rgbaIndex1 += 8;
 
 			// Line 2
@@ -106,11 +98,9 @@ CanvasRenderer.prototype.YCbCrToRGBA = function(y, cb, cr, rgba, alpha) {
 			rgba[rgbaIndex2]   = y3 + r;
 			rgba[rgbaIndex2+1] = y3 - g;
 			rgba[rgbaIndex2+2] = y3 + b;
-			rgba[rgbaIndex2+3] = y3 + a;
 			rgba[rgbaIndex2+4] = y4 + r;
 			rgba[rgbaIndex2+5] = y4 - g;
 			rgba[rgbaIndex2+6] = y4 + b;
-			rgba[rgbaIndex2+7] = y4 + a;
 			rgbaIndex2 += 8;
 		}
 

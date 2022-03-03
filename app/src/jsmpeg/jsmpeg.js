@@ -68,8 +68,8 @@ var JSMpeg = {
 	//   .stop()
 	//   .enqueuedTime - float, in seconds
 	//   .enabled - wether the output does anything upon receiving data
-	AudioOutput: {},
-
+	AudioOutput: {}, 
+	
 	// Data Outputs accept JSON data taken from DATA mpeg stream, and emits it
 	// to the user. API:
 	// .render(data) - json data to return the the DOM
@@ -98,7 +98,23 @@ var JSMpeg = {
 				array[i] = value;
 			}
 		}
-	}
+	},
+
+	Base64ToArrayBuffer: function(base64) {
+		var binary =  window.atob(base64);
+		var length = binary.length;
+		var bytes = new Uint8Array(length);
+		for (var i = 0; i < length; i++)        {
+			bytes[i] = binary.charCodeAt(i);
+		}
+		return bytes.buffer;
+	},
+
+	// The build process may append `JSMpeg.WASM_BINARY_INLINED = base64data;` 
+	// to the minified source.
+	// If this property is present, jsmpeg will use the inlined binary data
+	// instead of trying to load a jsmpeg.wasm file via Ajax.
+	WASM_BINARY_INLINED: null
 };
 
 // Automatically create players for all found <div class="jsmpeg"/> elements.
@@ -108,4 +124,5 @@ if (document.readyState === 'complete') {
 else {
 	document.addEventListener('DOMContentLoaded', JSMpeg.CreateVideoElements);
 }
+
 

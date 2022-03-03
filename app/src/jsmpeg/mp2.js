@@ -6,13 +6,15 @@ JSMpeg.Decoder.MP2Audio = (function(){ "use strict";
 var MP2 = function(options) {
 	JSMpeg.Decoder.Base.call(this, options);
 
+	this.onDecodeCallback = options.onAudioDecode;
+
 	var bufferSize = options.audioBufferSize || 128*1024;
 	var bufferMode = options.streaming
 		? JSMpeg.BitBuffer.MODE.EVICT
 		: JSMpeg.BitBuffer.MODE.EXPAND;
 
 	this.bits = new JSMpeg.BitBuffer(bufferSize, bufferMode);
-	
+
 	this.left = new Float32Array(1152);
 	this.right = new Float32Array(1152);
 	this.sampleRate = 44100;
@@ -20,7 +22,7 @@ var MP2 = function(options) {
 	this.D = new Float32Array(1024);
 	this.D.set(MP2.SYNTHESIS_WINDOW, 0);
 	this.D.set(MP2.SYNTHESIS_WINDOW, 512);
-	this.V = new Float32Array(1024);
+	this.V = [new Float32Array(1024), new Float32Array(1024)];
 	this.U = new Int32Array(32);
 	this.VPos = 0;
 
@@ -41,6 +43,8 @@ MP2.prototype = Object.create(JSMpeg.Decoder.Base.prototype);
 MP2.prototype.constructor = MP2;
 
 MP2.prototype.decode = function() {
+	var startTime = JSMpeg.Now();
+
 	var pos = this.bits.index >> 3;
 	if (pos >= this.bits.byteLength) {
 		return false;
@@ -48,7 +52,6 @@ MP2.prototype.decode = function() {
 
 	var decoded = this.decodeFrame(this.left, this.right);
 	this.bits.index = (pos + decoded) << 3;
-
 	if (!decoded) {
 		return false;
 	}
@@ -58,6 +61,11 @@ MP2.prototype.decode = function() {
 	}
 
 	this.advanceDecodedTime(this.left.length / this.sampleRate);
+
+	var elapsedTime = JSMpeg.Now() - startTime;
+	if (this.onDecodeCallback) {
+		this.onDecodeCallback(this, elapsedTime);
+	}
 	return true;
 };
 
@@ -68,7 +76,6 @@ MP2.prototype.getCurrentTime = function() {
 
 MP2.prototype.decodeFrame = function(left, right) {
 	// Check for valid header: syncword OK, MPEG-Audio Layer 2
-
 	var sync = this.bits.read(11),
 		version = this.bits.read(2),
 		layer = this.bits.read(2),
@@ -81,7 +88,6 @@ MP2.prototype.decodeFrame = function(left, right) {
 	) {
 		return 0; // Invalid header or unsupported version
 	}
-
 
 	var bitrateIndex = this.bits.read(4) - 1;
 	if (bitrateIndex > 13) {
@@ -236,7 +242,7 @@ MP2.prototype.decodeFrame = function(left, right) {
 				this.VPos = (this.VPos - 64) & 1023;
 
 				for (var ch = 0;  ch < 2; ch++) {
-					MP2.MatrixTransform(this.sample[ch], p, this.V, this.VPos);
+					MP2.MatrixTransform(this.sample[ch], p, this.V[ch], this.VPos);
 
 					// Build U, windowing, calculate output
 					JSMpeg.Fill(this.U, 0);
@@ -245,7 +251,7 @@ MP2.prototype.decodeFrame = function(left, right) {
 					var vIndex = (this.VPos % 128) >> 1;
 					while (vIndex < 1024) {
 						for (var i = 0; i < 32; ++i) {
-							this.U[i] += this.D[dIndex++] * this.V[vIndex++];
+							this.U[i] += this.D[dIndex++] * this.V[ch][vIndex++];
 						}
 
 						vIndex += 128-32;
@@ -256,7 +262,7 @@ MP2.prototype.decodeFrame = function(left, right) {
 					dIndex -= (512 - 32);
 					while (vIndex < 1024) {
 						for (var i = 0; i < 32; ++i) {
-							this.U[i] += this.D[dIndex++] * this.V[vIndex++];
+							this.U[i] += this.D[dIndex++] * this.V[ch][vIndex++];
 						}
 
 						vIndex += 128-32;

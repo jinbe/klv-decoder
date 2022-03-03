@@ -42,6 +42,7 @@
         'application/json' : ['czml', 'json', 'geojson', 'topojson'],
         'image/crn' : ['crn'],
         'image/ktx' : ['ktx'],
+        'application/wasm' : ['wasm'],
         'model/gltf+json' : ['gltf'],
         'model/gltf.binary' : ['bgltf', 'glb'],
         'text/plain' : ['glsl']

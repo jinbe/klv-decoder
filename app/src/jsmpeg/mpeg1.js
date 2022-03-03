@@ -6,13 +6,15 @@ JSMpeg.Decoder.MPEG1Video = (function(){ "use strict";
 var MPEG1 = function(options) {
 	JSMpeg.Decoder.Base.call(this, options);
 
+	this.onDecodeCallback = options.onVideoDecode;
+
 	var bufferSize = options.videoBufferSize || 512*1024;
 	var bufferMode = options.streaming
 		? JSMpeg.BitBuffer.MODE.EVICT
 		: JSMpeg.BitBuffer.MODE.EXPAND;
 
 	this.bits = new JSMpeg.BitBuffer(bufferSize, bufferMode);
-	
+
 	this.customIntraQuantMatrix = new Uint8Array(64);
 	this.customNonIntraQuantMatrix = new Uint8Array(64);
 	this.blockData = new Int32Array(64);
@@ -40,6 +42,8 @@ MPEG1.prototype.write = function(pts, buffers) {
 };
 
 MPEG1.prototype.decode = function() {
+	var startTime = JSMpeg.Now();
+	
 	if (!this.hasSequenceHeader) {
 		return false;
 	}
@@ -49,11 +53,13 @@ MPEG1.prototype.decode = function() {
 		return false;
 	}
 
-
 	this.decodePicture();
-
 	this.advanceDecodedTime(1/this.frameRate);
 
+	var elapsedTime = JSMpeg.Now() - startTime;
+	if (this.onDecodeCallback) {
+		this.onDecodeCallback(this, elapsedTime);
+	}
 	return true;
 };
 
@@ -68,6 +74,7 @@ MPEG1.prototype.readHuffman = function(codeTable) {
 
 // Sequence Layer
 
+MPEG1.prototype.frameRate = 30;
 MPEG1.prototype.decodeSequenceHeader = function() {
 	var newWidth = this.bits.read(12),
 		newHeight = this.bits.read(12);
@@ -147,6 +154,7 @@ MPEG1.prototype.initBuffers = function() {
 
 
 // Picture Layer
+
 MPEG1.prototype.currentY = null;
 MPEG1.prototype.currentCr = null;
 MPEG1.prototype.currentCb = null;
@@ -206,7 +214,7 @@ MPEG1.prototype.decodePicture = function(skipOutput) {
 
 	// Invoke decode callbacks
 	if (this.destination) {
-		this.destination.render(this.currentY, this.currentCr, this.currentCb); //render decoded image onto canvas
+		this.destination.render(this.currentY, this.currentCr, this.currentCb, true);
 	}
 
 	// If this is a reference picutre then rotate the prediction pointers

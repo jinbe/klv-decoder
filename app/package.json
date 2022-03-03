@@ -5,20 +5,20 @@
   "homepage": "https://github.com/tayre",
   "license": "Apache-2.0",
   "dependencies": {
-     "requirejs": "^2.3.2",
-     "request": "^2.79.0",
-     "compression": "^1.6.2",
-     "express": "^4.15.0",
-     "ws": "^1.0.24",
-     "yargs": "^7.0.1"
+    "compression": "^1.6.2",
+    "express": "^4.15.0",
+    "request": "^2.79.0",
+    "requirejs": "^2.3.2",
+    "ws": "^1.0.24",
+    "yargs": "^7.0.1"
   },
   "devDependencies": {
     "almond": "^0.3.3",
     "aws-sdk": "^2.18.0",
     "bluebird": "^3.4.6",
-    "compressible": "^2.0.9",
     "coffeescript": "^1.12.6",
-    "electron": "^9.1.0",
+    "compressible": "^2.0.9",
+    "electron": "^17.0.0-beta.9",
     "event-stream": "^3.3.4",
     "globby": "^6.1.0",
     "glsl-strip-comments": "^1.0.0",

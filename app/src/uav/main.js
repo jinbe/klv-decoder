@@ -6,8 +6,10 @@ Cesium.BingMapsApi.defaultKey = "AhI0NfRpiC24Gpc_LkSO2rnAQFoeyLkKKJcW9mhJvWeey_f
 $(document).ready(function() {
 
     var websocket_url = "ws://" + document.location.hostname + ":8082/";
+
     var player = new JSMpeg.Player(websocket_url, {
         audio: false,
+        disableWebAssembly: true,
         canvas: document.getElementById("video-canvas"),
         klvelement: document.getElementById("klv-output")
     });
@@ -77,14 +79,14 @@ var UAV = {
     updateTelemetry: function(data) {
         var payload = data.payload;
 
-        var platform_tail_number = payload.platform_tail_number.value;
-        var altitude = payload.sensor_true_altitude.value + UAV.GEOID_HEIGHT;
-        var latitude = payload.sensor_latitude.value;
-        var longitude = payload.sensor_longitude.value;
+        var platform_tail_number = payload.platform_tail_number?.value;
+        var altitude = payload.sensor_true_altitude?.value + UAV.GEOID_HEIGHT;
+        var latitude = payload.sensor_latitude?.value;
+        var longitude = payload.sensor_longitude?.value;
 
-        var roll = payload.platform_roll_angle.value;
-        var pitch = payload.sensor_relative_elevation_angle.value;
-        var yaw = payload.platform_heading_angle.value + payload.sensor_relative_azimuth_angle.value;
+        var roll = payload.platform_roll_angle?.value;
+        var pitch = payload.sensor_relative_elevation_angle?.value;
+        var yaw = payload.platform_heading_angle?.value + payload.sensor_relative_azimuth_angle?.value;
 
         var result = [];
         result.push(platform_tail_number);
@@ -99,8 +101,8 @@ var UAV = {
     updateFPV: function(data) {
         var payload = data.payload
 
-        var latitude = payload.sensor_latitude.value;
-        var longitude = payload.sensor_longitude.value;
+        var latitude = payload.sensor_latitude?.value;
+        var longitude = payload.sensor_longitude?.value;
 
         /* 
          * Ideally we would get sensor ellipsoid height (Tag 75), but instead we are getting sensor true altitude measured from MSL.
@@ -114,26 +116,26 @@ var UAV = {
          * 
          * After conducting an actual flight it looks like sensor_true_altitude is actually HAE.
          */
-        var altitude = payload.sensor_true_altitude.value + UAV.GEOID_HEIGHT;
+        var altitude = payload.sensor_true_altitude?.value + UAV.GEOID_HEIGHT;
 
-        var camera_roll = 0; // Cesium.Math.toRadians(payload.platform_roll_angle.value + payload.sensor_relative_roll_angle.value);
-        var camera_pitch = Cesium.Math.toRadians(payload.sensor_relative_elevation_angle.value);
-        var camera_yaw = Cesium.Math.toRadians(payload.platform_heading_angle.value + payload.sensor_relative_azimuth_angle.value);
+        var camera_roll = Cesium.Math.toRadians(payload.platform_roll_angle?.value + payload.sensor_relative_roll_angle?.value);
+        var camera_pitch = Cesium.Math.toRadians(payload.sensor_relative_elevation_angle?.value);
+        var camera_yaw = Cesium.Math.toRadians(payload.platform_heading_angle?.value + payload.sensor_relative_azimuth_angle?.value);
 
         var options = {
 
-            duration: 1,
+            duration: 0,
             easingFunction: Cesium.EasingFunction.LINEAR_NONE,
             destination: Cesium.Cartesian3.fromDegrees(longitude, latitude, altitude),
             orientation: {
-                roll: camera_roll,
-                pitch: camera_pitch,
-                heading: camera_yaw
-            }
+                 roll: camera_roll,
+                 pitch: camera_pitch,
+                 heading: camera_yaw
+             }
         }
 
         // HDZOOM is 71.8 degrees
-        CesiumViewer.camera.frustum.fov = Cesium.Math.toRadians(payload.sensor_horizontal_fov.value + UAV.FOV_FUDGE)
+        CesiumViewer.camera.frustum.fov = Cesium.Math.toRadians(payload.sensor_horizontal_fov?.value + UAV.FOV_FUDGE)
         CesiumViewer.camera.flyTo(options);
     },
 
@@ -143,17 +145,17 @@ var UAV = {
 
         var payload = data.payload;
 
-        var date = payload.unix_time_stamp.value;
+        var date = payload.unix_time_stamp?.value;
 
-        var latitude = payload.sensor_latitude.value;
-        var longitude = payload.sensor_longitude.value;
-        var altitude = payload.sensor_true_altitude.value + UAV.GEOID_HEIGHT;
+        var latitude = payload.sensor_latitude?.value;
+        var longitude = payload.sensor_longitude?.value;
+        var altitude = payload.sensor_true_altitude?.value + UAV.GEOID_HEIGHT;
 
         var aircraft_roll = 0;
-        Cesium.Math.toRadians(payload.platform_roll_angle.value); //roll seems wrong
+        Cesium.Math.toRadians(payload.platform_roll_angle?.value); //roll seems wrong
         var aircraft_pitch = 0;
-        Cesium.Math.toRadians(payload.platform_pitch_angle.value);
-        var aircraft_yaw = Cesium.Math.toRadians(payload.platform_heading_angle.value);
+        Cesium.Math.toRadians(payload.platform_pitch_angle?.value);
+        var aircraft_yaw = Cesium.Math.toRadians(payload.platform_heading_angle?.value);
 
         var position = Cesium.Cartesian3.fromDegrees(longitude, latitude, altitude)
         var hpr = new Cesium.HeadingPitchRoll(aircraft_yaw, aircraft_pitch, aircraft_roll);
@@ -427,5 +429,8 @@ var UAV = {
                 UAV.showVideo(false);
             }
         });
+        
+        UAV.disableTerrain();
+        UAV.startFPVMode();
     }
 }

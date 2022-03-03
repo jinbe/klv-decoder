@@ -58,11 +58,10 @@ TS.prototype.parsePacket = function() {
 		adaptationField = this.bits.read(2),
 		continuityCounter = this.bits.read(4);
 
-
-
 	// If this is the start of a new payload; signal the end of the previous
 	// frame, if we didn't do so already.
 	var streamId = this.pidsToStreamIds[pid];
+
 	if (payloadStart && streamId) {
 		var pi = this.pesPacketInfo[streamId];
 		if (pi && pi.currentLength) {
@@ -77,12 +76,11 @@ TS.prototype.parsePacket = function() {
 			this.bits.skip(adaptationFieldLength << 3);
 		}
 
-		if (payloadStart || this.bits.nextBytesAreStartCode()) {
+		if (payloadStart && this.bits.nextBytesAreStartCode()) {
 			this.bits.skip(24);
 			streamId = this.bits.read(8);
-
 			this.pidsToStreamIds[pid] = streamId;
-			
+
 			var packetLength = this.bits.read(16)
 			this.bits.skip(8);
 			var ptsDtsFlag = this.bits.read(2);
@@ -220,9 +218,12 @@ TS.STREAM = {
 	PRIVATE_2: 0xBF,
 	AUDIO_1: 0xC0,
 	VIDEO_1: 0xE0,
-	DIRECTORY: 0xFF
+	DIRECTORY: 0xFF,
+	METADATA: 0xFC
 };
 
 return TS;
 
 })();
+
+

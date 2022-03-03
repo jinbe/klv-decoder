@@ -38,6 +38,7 @@ JSMpeg.Decoder.Metadata = (function() {
 
 		this.bits.rewind(128);
 		var startIndex = this.bits.index; // Save this pointer for checking CRC
+		var checksum = 0;
 
 		if (key != -1) {
 
@@ -61,7 +62,6 @@ JSMpeg.Decoder.Metadata = (function() {
 
 			if (!msb) {
 				payloadlength = this.bits.read(7);
-
 			} else {
 				var numbytes = this.bits.read(7);
 				payloadlength = this.bits.read(8 * numbytes);
@@ -69,22 +69,29 @@ JSMpeg.Decoder.Metadata = (function() {
 
 			result["payload_length"] = payloadlength;
 
+			var bitsRead = 0;
+
 			do {
 				var key = this.bits.read(8);
+				bitsRead += 8;
 				if (key == 74) {
-					console.log(key)
+					// console.log(key)
 				}
 				var tag = DATA.KLV_METADATA_ELEMENTS[key]
 
 				// Length of v, in bytes. Potentially this could be long form length, but it our encoder seems to only output at values at most 127 bits
 				var length = this.bits.read(8);
+				bitsRead += 8;
 				var value = this.getKLVValue(key, length);
+				bitsRead += length * 8;
 
-				result["payload"][tag] = {
-					"key": key,
-					"length": length,
-					"value": value
-				};
+				if (!!tag) {
+					result["payload"][tag] = {
+						"key": key,
+						"length": length,
+						"value": value
+					};
+				}
 
 			} while (key > 1);
 
@@ -103,7 +110,7 @@ JSMpeg.Decoder.Metadata = (function() {
 	DATA.prototype.getKLVValue = function(key, length) {
 		switch (key) {
 			case 1: // crc
-				return this.bits.read(16);
+				return this.bits.read(length << 3);
 			case 2: // unix timestamp
 				var buffer = [];
 				for (var i = 0; i < length; i++) {
@@ -112,63 +119,63 @@ JSMpeg.Decoder.Metadata = (function() {
 				var unix_timestamp = bigInt(buffer.join(''), 16).toString();
 				return new Date(unix_timestamp / 1000); // Convert from microseconds to milliseconds, and return
 			case 5:
-				return this.to_lds_platform_heading(this.bits.read(16));
+				return this.to_lds_platform_heading(this.bits.read(length << 3));
 			case 6:
-				return this.to_lds_platform_pitch(this.bits.read(16));
+				return this.to_lds_platform_pitch(this.bits.read(length << 3));
 			case 7:
-				return this.to_lds_platform_roll(this.bits.read(16));
+				return this.to_lds_platform_roll(this.bits.read(length << 3));
 			case 8:
-				return this.to_lds_platform_true_airspeed(this.bits.read(8));
+				return this.to_lds_platform_true_airspeed(this.bits.read(length << 3));
 			case 9:
-				return this.to_lds_platform_indicated_airspeed(this.bits.read(8));
+				return this.to_lds_platform_indicated_airspeed(this.bits.read(length << 3));
 			case 13:
-				return this.to_lds_latitude(this.bits.read(32));
+				return this.to_lds_latitude(this.bits.read(length << 3));
 			case 14:
-				return this.to_lds_longitude(this.bits.read(32));
+				return this.to_lds_longitude(this.bits.read(length << 3));
 			case 15:
-				return this.to_lds_altitude(this.bits.read(16));
+				return this.to_lds_altitude(this.bits.read(length << 3));
 			case 16:
-				return this.to_lds_sensor_horizontal_fov(this.bits.read(16));
+				return this.to_lds_sensor_horizontal_fov(this.bits.read(length << 3));
 			case 17:
-				return this.to_lds_sensor_vertical_fov(this.bits.read(16));
+				return this.to_lds_sensor_vertical_fov(this.bits.read(length << 3));
 			case 18:
-				return this.to_lds_sensor_rel_azimuth_angle(this.bits.read(32));
+				return this.to_lds_sensor_rel_azimuth_angle(this.bits.read(length << 3));
 			case 19:
-				return this.to_lds_rel_elevation_angle(this.bits.read(32));
+				return this.to_lds_rel_elevation_angle(this.bits.read(length << 3));
 			case 20:
-				return this.to_lds_rel_roll_angle(this.bits.read(32));
+				return this.to_lds_rel_roll_angle(this.bits.read(length << 3));
 			case 21:
-				return this.to_lds_slant_range(this.bits.read(32));
+				return this.to_lds_slant_range(this.bits.read(length << 3));
 			case 22:
-				return this.to_lds_target_width(this.bits.read(16));
+				return this.to_lds_target_width(this.bits.read(length << 3));
 			case 23:
-				var lds_dec = this.to_lds_frame_center_latitude(this.bits.read(32));
+				var lds_dec = this.to_lds_frame_center_latitude(this.bits.read(length << 3));
 				DATA.LDS_23 = lds_dec;
 				return lds_dec;
 			case 24:
-				var lds_dec = this.to_lds_frame_center_longitude(this.bits.read(32));
+				var lds_dec = this.to_lds_frame_center_longitude(this.bits.read(length << 3));
 				DATA.LDS_24 = lds_dec;
 				return lds_dec;
 			case 25:
-				return this.to_lds_frame_center_elevation(this.bits.read(16));
+				return this.to_lds_frame_center_elevation(this.bits.read(length << 3));
 			case 26:
-				return this.to_lds_offset_corner_latitude_point(this.bits.read(16));
+				return this.to_lds_offset_corner_latitude_point(this.bits.read(length << 3));
 			case 27:
-				return this.to_lds_offset_corner_longitude_point(this.bits.read(16));
+				return this.to_lds_offset_corner_longitude_point(this.bits.read(length << 3));
 			case 28:
-				return this.to_lds_offset_corner_latitude_point(this.bits.read(16));
+				return this.to_lds_offset_corner_latitude_point(this.bits.read(length << 3));
 			case 29:
-				return this.to_lds_offset_corner_longitude_point(this.bits.read(16));
+				return this.to_lds_offset_corner_longitude_point(this.bits.read(length << 3));
 			case 30:
-				return this.to_lds_offset_corner_latitude_point(this.bits.read(16));
+				return this.to_lds_offset_corner_latitude_point(this.bits.read(length << 3));
 			case 31:
-				return this.to_lds_offset_corner_longitude_point(this.bits.read(16));
+				return this.to_lds_offset_corner_longitude_point(this.bits.read(length << 3));
 			case 32:
-				return this.to_lds_offset_corner_latitude_point(this.bits.read(16));
+				return this.to_lds_offset_corner_latitude_point(this.bits.read(length << 3));
 			case 33:
-				return this.to_lds_offset_corner_longitude_point(this.bits.read(16));
+				return this.to_lds_offset_corner_longitude_point(this.bits.read(length << 3));
 			case 65:
-				return this.to_uas_lds_version_number(this.bits.read(8));
+				return this.to_uas_lds_version_number(this.bits.read(length << 3));
 			case 4:
 			case 10:
 			case 11:
@@ -176,21 +183,21 @@ JSMpeg.Decoder.Metadata = (function() {
 			case 59:
 				return this.to_lds_string(length);
 			case 82:
-				return this.to_lds_latitude(this.bits.read(32));
+				return this.to_lds_latitude(this.bits.read(length << 3));
 			case 83:
-				return this.to_lds_longitude(this.bits.read(32));
+				return this.to_lds_longitude(this.bits.read(length << 3));
 			case 84:
-				return this.to_lds_latitude(this.bits.read(32));
+				return this.to_lds_latitude(this.bits.read(length << 3));
 			case 85:
-				return this.to_lds_longitude(this.bits.read(32));
+				return this.to_lds_longitude(this.bits.read(length << 3));
 			case 86:
-				return this.to_lds_latitude(this.bits.read(32));
+				return this.to_lds_latitude(this.bits.read(length << 3));
 			case 87:
-				return this.to_lds_longitude(this.bits.read(32));
+				return this.to_lds_longitude(this.bits.read(length << 3));
 			case 88:
-				return this.to_lds_latitude(this.bits.read(32));
+				return this.to_lds_latitude(this.bits.read(length << 3));
 			case 89:
-				return this.to_lds_longitude(this.bits.read(32));
+				return this.to_lds_longitude(this.bits.read(length << 3));
 			default:
 				this.bits.read(length << 3);
 				return -1;

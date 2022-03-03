@@ -27,17 +27,28 @@ var Player = function(url, options) {
 	this.demuxer = new JSMpeg.Demuxer.TS(options);
 	this.source.connect(this.demuxer);
 
+	if (!options.disableWebAssembly && JSMpeg.WASMModule.IsSupported()) {
+		this.wasmModule = JSMpeg.WASMModule.GetModule();
+		options.wasmModule = this.wasmModule;
+	}
+
 	if (options.video !== false) {
-		this.video = new JSMpeg.Decoder.MPEG1Video(options);
+		this.video = options.wasmModule
+			? new JSMpeg.Decoder.MPEG1VideoWASM(options)
+			: new JSMpeg.Decoder.MPEG1Video(options);
+
 		this.renderer = !options.disableGl && JSMpeg.Renderer.WebGL.IsSupported()
 			? new JSMpeg.Renderer.WebGL(options)
 			: new JSMpeg.Renderer.Canvas2D(options);
+
 		this.demuxer.connect(JSMpeg.Demuxer.TS.STREAM.VIDEO_1, this.video);
 		this.video.connect(this.renderer);
 	}
 
 	if (options.audio !== false && JSMpeg.AudioOutput.WebAudio.IsSupported()) {
-		this.audio = new JSMpeg.Decoder.MP2Audio(options);
+		this.audio = options.wasmModule
+			? new JSMpeg.Decoder.MP2AudioWASM(options)
+			: new JSMpeg.Decoder.MP2Audio(options);
 		this.audioOut = new JSMpeg.AudioOutput.WebAudio(options);
 		this.demuxer.connect(JSMpeg.Demuxer.TS.STREAM.AUDIO_1, this.audio);
 		this.audio.connect(this.audioOut);
@@ -45,8 +56,10 @@ var Player = function(url, options) {
 
 	if(options.data !== false){
 		this.data = new JSMpeg.Decoder.Metadata(options);
-		this.demuxer.connect(JSMpeg.Demuxer.TS.STREAM.PRIVATE_1, this.data);
 		this.klvOut = new JSMpeg.DataOutput.KLV(options);
+		// KLV data could be in private_1 or metadata streamms
+		this.demuxer.connect(JSMpeg.Demuxer.TS.STREAM.PRIVATE_1, this.data);
+		this.demuxer.connect(JSMpeg.Demuxer.TS.STREAM.METADATA, this.data);
 		this.data.connect(this.klvOut)
 	}
 
@@ -54,19 +67,40 @@ var Player = function(url, options) {
 		get: this.getCurrentTime,
 		set: this.setCurrentTime
 	});
-
 	Object.defineProperty(this, 'volume', {
 		get: this.getVolume,
 		set: this.setVolume
 	});
 
+	this.paused = true;
 	this.unpauseOnShow = false;
 	if (options.pauseWhenHidden !== false) {
 		document.addEventListener('visibilitychange', this.showHide.bind(this));
 	}
 
-	this.source.start();
+	// If we have WebAssembly support, wait until the module is compiled before
+	// loading the source. Otherwise the decoders won't know what to do with
+	// the source data.
+	if (this.wasmModule) {
+		if (this.wasmModule.ready) {
+			this.startLoading();
+		}
+		else if (JSMpeg.WASM_BINARY_INLINED) {
+			var wasm = JSMpeg.Base64ToArrayBuffer(JSMpeg.WASM_BINARY_INLINED);
+			this.wasmModule.loadFromBuffer(wasm, this.startLoading.bind(this));
+		}
+		else {
+			this.wasmModule.loadFromFile('jsmpeg.wasm',  this.startLoading.bind(this));
+		}
+	}
+	else {
+		this.startLoading();
 
+	}
+};
+
+Player.prototype.startLoading = function() {
+	this.source.start();
 	if (this.autoplay) {
 		this.play();
 	}
@@ -83,20 +117,35 @@ Player.prototype.showHide = function(ev) {
 };
 
 Player.prototype.play = function(ev) {
+	if (this.animationId) {
+		return;
+	}
+
 	this.animationId = requestAnimationFrame(this.update.bind(this));
 	this.wantsToPlay = true;
+	this.paused = false;
 };
 
 Player.prototype.pause = function(ev) {
+	if (this.paused) {
+		return;
+	}
+
 	cancelAnimationFrame(this.animationId);
+	this.animationId = null;
 	this.wantsToPlay = false;
 	this.isPlaying = false;
+	this.paused = true;
 
 	if (this.audio && this.audio.canPlay) {
 		// Seek to the currentTime again - audio may already be enqueued a bit
 		// further, so we have to rewind it.
 		this.audioOut.stop();
 		this.seek(this.currentTime);
+	}
+
+	if (this.options.onPause) {
+		this.options.onPause(this);
 	}
 };
 
@@ -121,8 +170,10 @@ Player.prototype.stop = function(ev) {
 Player.prototype.destroy = function() {
 	this.pause();
 	this.source.destroy();
-	this.renderer.destroy();
-	this.audioOut.destroy();
+	this.video && this.video.destroy();
+	this.renderer && this.renderer.destroy();
+	this.audio && this.audio.destroy();
+	this.audioOut && this.audioOut.destroy();
 };
 
 Player.prototype.seek = function(time) {
@@ -163,6 +214,10 @@ Player.prototype.update = function() {
 	if (!this.isPlaying) {
 		this.isPlaying = true;
 		this.startTime = JSMpeg.Now() - this.currentTime;
+
+		if (this.options.onPlay) {
+			this.options.onPlay(this);
+		}
 	}
 
 	if (this.options.streaming) {
@@ -194,10 +249,17 @@ Player.prototype.updateForStreaming = function() {
 				this.audioOut.resetEnqueuedTime();
 				this.audioOut.enabled = false;
 			}
-			decoded = this.audio.decode();		
+			decoded = this.audio.decode();
 		} while (decoded);
 		this.audioOut.enabled = true;
 	}
+};
+
+Player.prototype.nextFrame = function() {
+	if (this.source.established && this.video) {
+		return this.video.decode();
+	}
+	return false;
 };
 
 Player.prototype.updateForStaticFile = function() {
@@ -210,7 +272,7 @@ Player.prototype.updateForStaticFile = function() {
 	if (this.audio && this.audio.canPlay) {
 		// Do we have to decode and enqueue some more audio data?
 		while (
-			!notEnoughData && 
+			!notEnoughData &&
 			this.audio.decodedTime - this.audio.currentTime < 0.25
 		) {
 			notEnoughData = !this.audio.decode();
@@ -256,7 +318,16 @@ Player.prototype.updateForStaticFile = function() {
 		}
 		else {
 			this.pause();
+			if (this.options.onEnded) {
+				this.options.onEnded(this);
+			}
 		}
+	}
+
+	// If there's not enough data and the source is not completed, we have
+	// just stalled.
+	else if (notEnoughData && this.options.onStalled) {
+		this.options.onStalled(this);
 	}
 };
 
