@@ -10,10 +10,13 @@ var TS = function(options) {
 	this.pesPacketInfo = {};
 	this.startTime = 0;
 	this.currentTime = 0;
+	this.lastVideoTime = 0;
+	this.sendData = true;
 };
 
 TS.prototype.connect = function(streamId, destination) {
 	this.pesPacketInfo[streamId] = {
+		streamId: streamId,
 		destination: destination,
 		currentLength: 0,
 		totalLength: 0,
@@ -113,6 +116,13 @@ TS.prototype.parsePacket = function() {
 					if (this.startTime === -1) {
 						this.startTime = pts;
 					}
+
+					if (streamId == TS.STREAM.METADATA) {
+						this.sendData = (pts <= this.lastVideo);
+					} else {
+						this.lastVideo = pts;
+					}
+					
 				}
 
 				var payloadLength = packetLength 
@@ -203,7 +213,13 @@ TS.prototype.packetAddData = function(pi, start, end) {
 };
 
 TS.prototype.packetComplete = function(pi) {
-	pi.destination.write(pi.pts, pi.buffers);
+	if (pi.streamId == TS.STREAM.METADATA) {
+		if (this.sendData) {
+			pi.destination.write(pi.pts, pi.buffers);
+		}
+	} else {
+		pi.destination.write(pi.pts, pi.buffers);
+	}
 	pi.totalLength = 0;
 	pi.currentLength = 0;
 	pi.buffers = [];

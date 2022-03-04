@@ -55,7 +55,6 @@ $(document).ready(function() {
     UAV.enableTerrain();
 
     var options = {
-        duration: 0,
         easingFunction: Cesium.EasingFunction.LINEAR_NONE,
         destination: Cesium.Cartesian3.fromDegrees(-122.4769744567931, 37.810634592459834, 25),
     }
